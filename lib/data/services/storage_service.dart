@@ -10,22 +10,34 @@ class StorageService {
     _userDataBox = await Hive.openBox<UserData>('userDataBox');
 
     if (_userDataBox.isEmpty) {
-      _userDataBox.put('user', UserData(diamondCount: 10));
+      // Uygulama ilk kez yüklendiğinde varsayılan kullanıcı verilerini oluştur
+      _userDataBox.put('user', UserData(diamondCount: 10, hasSeenWelcomePopup: false));
     }
   }
 
   UserData getUserData() {
     final data = _userDataBox.get('user');
     if (data != null) {
-      // DÜZELTME: Eski veriye sahip kullanıcılar için
-      // tamamlanan konular listesinin null (boş) olmasını engelle.
       data.completedTopicIds ??= [];
-      data.rewardedAdWatchCount ??= 0;
-      data.cooldownEndTime ??= 0;
+      // Yeniden adlandırılmış ve yeni alanları varsayılan değerlerle başlat
+      data.storeRewardedAdWatchCount ??= 0;
+      data.storeAdCooldownEndTime ??= 0;
+      data.unlockedTipsTopicIds ??= [];
+      data.hasSeenWelcomePopup ??= false;
+      data.timeSpentMinutesToday ??= 0;
+      data.lastTimeSpentUpdateDay ??= 0;
+      data.dailyTimeRewardClaimed ??= false;
+      data.randomTestCorrectAnswersToday ??= 0;
+      data.lastRandomTestUpdateDay ??= 0;
+      data.dailyRandomTestRewardClaimed ??= false;
+      data.dailyPremiumRewardClaimed ??= false;
+      data.lastPremiumRewardDay ??= 0;
+      data.randomTestEntryAdWatchCount ??= 0; // Yeni alan
+      data.randomTestEntryAdCooldownEndTime ??= 0; // Yeni alan
       return data;
     }
     // Her ihtimale karşı varsayılan bir veri döndür.
-    return UserData(diamondCount: 10);
+    return UserData(diamondCount: 10, hasSeenWelcomePopup: false);
   }
 
   Future<void> updateUserData(UserData data) async {

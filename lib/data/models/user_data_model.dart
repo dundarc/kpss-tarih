@@ -16,23 +16,64 @@ class UserData extends HiveObject {
   @HiveField(3)
   List<String> completedTopicIds;
 
+  // Ödüllü reklam sayaçları ve cooldown süreleri güncellendi
   @HiveField(4)
-  int rewardedAdWatchCount;
-
+  int storeRewardedAdWatchCount; // Mağaza ödüllü reklam izleme sayısı
   @HiveField(5)
-  int cooldownEndTime;
+  int storeAdCooldownEndTime; // Mağaza ödüllü reklam cooldown süresi
 
-  // YENİ ALAN: Hangi konuların püf noktalarının açıldığını tutar.
   @HiveField(6)
   List<String> unlockedTipsTopicIds;
+
+  @HiveField(7)
+  bool hasSeenWelcomePopup;
+
+  @HiveField(8)
+  int timeSpentMinutesToday; // Bugün uygulamada geçirilen dakika
+  @HiveField(9)
+  int lastTimeSpentUpdateDay; // Son dakika güncellemesinin yapıldığı gün (yılın günü)
+  @HiveField(10)
+  bool dailyTimeRewardClaimed; // Günlük süre ödülü alındı mı
+
+  @HiveField(11)
+  int randomTestCorrectAnswersToday; // Bugün rastgele testlerde verilen doğru cevap sayısı
+  @HiveField(12)
+  int lastRandomTestUpdateDay; // Son rastgele test güncellemesinin yapıldığı gün (yılın günü)
+  @HiveField(13)
+  bool dailyRandomTestRewardClaimed; // Günlük rastgele test ödülü alındı mı
+
+  @HiveField(14)
+  bool dailyPremiumRewardClaimed; // Premium günlük ödül alındı mı
+  @HiveField(15)
+  int lastPremiumRewardDay; // Son premium ödülün alındığı gün (yılın günü)
+
+  // YENİ ALANLAR: Rastgele test girişi için ödüllü reklam sayaçları
+  @HiveField(16)
+  int randomTestEntryAdWatchCount; // Rastgele test girişi ödüllü reklam izleme sayısı
+  @HiveField(17)
+  int randomTestEntryAdCooldownEndTime; // Rastgele test girişi ödüllü reklam cooldown süresi
+
 
   UserData({
     required this.diamondCount,
     this.isPremium = false,
     this.isLifetimePremium = false,
     this.completedTopicIds = const [],
-    this.rewardedAdWatchCount = 0,
-    this.cooldownEndTime = 0,
-    this.unlockedTipsTopicIds = const [], // Başlangıçta boş liste
+    // Varsayılan değerler güncellendi
+    this.storeRewardedAdWatchCount = 0,
+    this.storeAdCooldownEndTime = 0,
+    this.unlockedTipsTopicIds = const [],
+    this.hasSeenWelcomePopup = false,
+    this.timeSpentMinutesToday = 0,
+    this.lastTimeSpentUpdateDay = 0,
+    this.dailyTimeRewardClaimed = false,
+    this.randomTestCorrectAnswersToday = 0,
+    this.lastRandomTestUpdateDay = 0,
+    this.dailyRandomTestRewardClaimed = false,
+    this.dailyPremiumRewardClaimed = false,
+    this.lastPremiumRewardDay = 0,
+    // Yeni alanlar için varsayılan değerler
+    this.randomTestEntryAdWatchCount = 0,
+    this.randomTestEntryAdCooldownEndTime = 0,
   });
 }

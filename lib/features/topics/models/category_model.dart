@@ -25,7 +25,7 @@ const List<Category> historyCategories = [
     id: 'cat1',
     title: 'İslamiyet Öncesi Türk Tarihi',
     description: 'İlk Türk devletleri, kültür ve yaşam.',
-    jsonPath: '/content/islamiyet_oncesi.json',
+    jsonPath: 'assets/content/islamiyet_oncesi.json', // Düzeltildi
     icon: Icons.shield_outlined,
     color: Colors.blue,
   ),
@@ -33,7 +33,7 @@ const List<Category> historyCategories = [
     id: 'cat2',
     title: 'İlk Müslüman Türk Devletleri',
     description: 'Karahanlı, Gazneli, Selçuklu dönemi.',
-    jsonPath: '/content/ilk_musluman.json',
+    jsonPath: 'assets/content/ilk_musluman.json', // Düzeltildi
     icon: Icons.mosque_outlined,
     color: Colors.teal,
   ),
@@ -41,7 +41,7 @@ const List<Category> historyCategories = [
     id: 'cat3',
     title: 'Anadolu Selçuklu Devleti',
     description: 'Anadolu\'nun Türkleşmesi ve beylikler.',
-    jsonPath: '/content/anadolu_selcuklu.json',
+    jsonPath: 'assets/content/anadolu_selcuklu.json', // Düzeltildi
     icon: Icons.fort,
     color: Colors.brown,
   ),
@@ -49,7 +49,7 @@ const List<Category> historyCategories = [
     id: 'cat4',
     title: 'Osmanlı İmparatorluğu',
     description: 'Kuruluş, Yükselme ve Duraklama.',
-    jsonPath: '/content/osmanli_devleti.json',
+    jsonPath: 'assets/content/osmanli_devleti.json', // Düzeltildi
     icon: Icons.castle,
     color: Colors.red,
   ),
@@ -57,7 +57,7 @@ const List<Category> historyCategories = [
     id: 'cat5',
     title: 'Osmanlı Kültür ve Medeniyeti',
     description: 'Devlet yapısı, toplum ve sanat.',
-    jsonPath: '/content/osmanli_kultur.json',
+    jsonPath: 'assets/content/osmanli_kultur.json', // Düzeltildi
     icon: Icons.palette_outlined,
     color: Colors.purple,
   ),
@@ -65,7 +65,7 @@ const List<Category> historyCategories = [
     id: 'cat6',
     title: 'Milli Mücadele Dönemi',
     description: 'Kurtuluş Savaşı ve hazırlık süreci.',
-    jsonPath: '/content/milli_mucadele.json',
+    jsonPath: 'assets/content/milli_mucadele.json', // Düzeltildi
     icon: Icons.flag_outlined,
     color: Colors.orange,
   ),
@@ -73,7 +73,7 @@ const List<Category> historyCategories = [
     id: 'cat7',
     title: 'Cumhuriyet Dönemi',
     description: 'Atatürk ilkeleri, inkılaplar ve dış politika.',
-    jsonPath: '/content/cumhuriyet_donemi.json',
+    jsonPath: 'assets/content/cumhuriyet_donemi.json', // Düzeltildi
     icon: Icons.account_balance_outlined,
     color: Colors.green,
   ),
@@ -81,7 +81,7 @@ const List<Category> historyCategories = [
     id: 'cat8',
     title: 'Yakın Dünya Tarihi',
     description: 'Dünya Savaşları ve Soğuk Savaş.',
-    jsonPath: '/content/yakin_dunya_tarihi.json',
+    jsonPath: 'assets/content/yakin_dunya_tarihi.json', // Düzeltildi
     icon: Icons.public,
     color: Colors.indigo,
   ),

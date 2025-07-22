@@ -21,16 +21,27 @@ class UserDataAdapter extends TypeAdapter<UserData> {
       isPremium: fields[1] as bool,
       isLifetimePremium: fields[2] as bool,
       completedTopicIds: (fields[3] as List).cast<String>(),
-      rewardedAdWatchCount: fields[4] as int,
-      cooldownEndTime: fields[5] as int,
+      storeRewardedAdWatchCount: fields[4] as int,
+      storeAdCooldownEndTime: fields[5] as int,
       unlockedTipsTopicIds: (fields[6] as List).cast<String>(),
+      hasSeenWelcomePopup: fields[7] as bool,
+      timeSpentMinutesToday: fields[8] as int,
+      lastTimeSpentUpdateDay: fields[9] as int,
+      dailyTimeRewardClaimed: fields[10] as bool,
+      randomTestCorrectAnswersToday: fields[11] as int,
+      lastRandomTestUpdateDay: fields[12] as int,
+      dailyRandomTestRewardClaimed: fields[13] as bool,
+      dailyPremiumRewardClaimed: fields[14] as bool,
+      lastPremiumRewardDay: fields[15] as int,
+      randomTestEntryAdWatchCount: fields[16] as int,
+      randomTestEntryAdCooldownEndTime: fields[17] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserData obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.diamondCount)
       ..writeByte(1)
@@ -40,11 +51,33 @@ class UserDataAdapter extends TypeAdapter<UserData> {
       ..writeByte(3)
       ..write(obj.completedTopicIds)
       ..writeByte(4)
-      ..write(obj.rewardedAdWatchCount)
+      ..write(obj.storeRewardedAdWatchCount)
       ..writeByte(5)
-      ..write(obj.cooldownEndTime)
+      ..write(obj.storeAdCooldownEndTime)
       ..writeByte(6)
-      ..write(obj.unlockedTipsTopicIds);
+      ..write(obj.unlockedTipsTopicIds)
+      ..writeByte(7)
+      ..write(obj.hasSeenWelcomePopup)
+      ..writeByte(8)
+      ..write(obj.timeSpentMinutesToday)
+      ..writeByte(9)
+      ..write(obj.lastTimeSpentUpdateDay)
+      ..writeByte(10)
+      ..write(obj.dailyTimeRewardClaimed)
+      ..writeByte(11)
+      ..write(obj.randomTestCorrectAnswersToday)
+      ..writeByte(12)
+      ..write(obj.lastRandomTestUpdateDay)
+      ..writeByte(13)
+      ..write(obj.dailyRandomTestRewardClaimed)
+      ..writeByte(14)
+      ..write(obj.dailyPremiumRewardClaimed)
+      ..writeByte(15)
+      ..write(obj.lastPremiumRewardDay)
+      ..writeByte(16)
+      ..write(obj.randomTestEntryAdWatchCount)
+      ..writeByte(17)
+      ..write(obj.randomTestEntryAdCooldownEndTime);
   }
 
   @override

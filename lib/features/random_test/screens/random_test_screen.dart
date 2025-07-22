@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tarih_app/core/providers/providers.dart';
 import 'package:kpss_tarih_app/data/models/question_model.dart';
 import 'package:kpss_tarih_app/data/models/user_data_model.dart';
+import 'package:kpss_tarih_app/features/test/screens/test_result_screen.dart'; // TestResultScreen'ı kullanmak için eklendi
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // AdMob için eklendi
 
 // --- STATE MANAGEMENT ---
 
@@ -71,7 +73,8 @@ class RandomTestController extends StateNotifier<TestState> {
   }
 
   void startTestWithAd() {
-    _ref.read(userDataProvider.notifier).useRewardedAd();
+    // Reklam izleme ve elmas kazanma mantığı UserDataNotifier'a taşındı.
+    // Burada sadece testi başlatıyoruz.
     _prepareAndStartTest();
   }
 
@@ -110,7 +113,7 @@ class RandomTestController extends StateNotifier<TestState> {
     }
   }
 
-  void nextQuestion() {
+  void nextQuestion(BuildContext context) {
     if (state.currentQuestionIndex < state.questions.length - 1) {
       state = state.copyWith(
         currentQuestionIndex: state.currentQuestionIndex + 1,
@@ -118,7 +121,24 @@ class RandomTestController extends StateNotifier<TestState> {
         eliminatedOptions: [],
       );
     } else {
-      state = TestState(status: TestStatus.completed);
+      int correctCount = 0;
+      for (int i = 0; i < state.questions.length; i++) {
+        if (state.selectedAnswers[i] == state.questions[i].correctAnswerIndex) {
+          correctCount++;
+        }
+      }
+
+      _ref.read(userDataProvider.notifier).recordRandomTestResult(correctCount);
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => TestResultScreen(
+            correctAnswers: correctCount,
+            totalQuestions: state.questions.length,
+            topicId: 'random_test',
+          ),
+        ),
+      );
     }
   }
 }
@@ -132,30 +152,103 @@ class RandomTestScreen extends ConsumerStatefulWidget {
 }
 
 class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+  RewardedAd? _rewardedAd;
+  bool _isRewardedAdLoaded = false;
   Timer? _timer;
   Duration _remainingTime = Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startTimerIfNeeded());
+    _loadBannerAd();
+    _loadRewardedAd(); // Ödüllü reklamı yükle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // ref.listen'ı artık burada çağırılıyor
+      ref.listen<int>(userDataProvider.select((data) => data.randomTestEntryAdCooldownEndTime), (previous, next) {
+        _startTimerIfNeeded(); // Cooldown değiştiğinde sayacı yeniden başlat
+        _loadRewardedAd(); // Cooldown değiştiğinde reklamı yeniden yüklemeye çalış
+      });
+      _startTimerIfNeeded(); // İlk sayaç başlatma
+    });
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    _rewardedAd?.dispose();
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          setState(() {
+            _isBannerAdLoaded = true;
+          });
+          print('Banner reklam yüklendi.');
+        },
+        onAdFailedToLoad: (ad, err) {
+          debugPrint('BannerAd failed to load: $err');
+          ad.dispose();
+        },
+        onAdOpened: (ad) => debugPrint('BannerAd opened.'),
+        onAdClosed: (ad) => debugPrint('BannerAd closed.'),
+        onAdImpression: (ad) => debugPrint('BannerAd impression.'),
+      ),
+    )..load();
+  }
+
+  void _loadRewardedAd() {
+    setState(() {
+      _isRewardedAdLoaded = false; // Yükleme başladı (önceki reklamı sıfırla)
+      _rewardedAd = null;
+    });
+    RewardedAd.load(
+      adUnitId: 'ca-app-pub-3940256099942544/5224354917',
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          setState(() {
+            _rewardedAd = ad;
+            _isRewardedAdLoaded = true;
+          });
+          print('Rewarded reklam yüklendi.');
+        },
+        onAdFailedToLoad: (err) {
+          debugPrint('RewardedAd failed to load: $err');
+          setState(() {
+            _isRewardedAdLoaded = false;
+            _rewardedAd = null;
+          });
+        },
+      ),
+    );
   }
 
   void _startTimerIfNeeded() {
     final userData = ref.read(userDataProvider);
-    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.cooldownEndTime);
+    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.randomTestEntryAdCooldownEndTime); // Doğru cooldown alanı
 
     if (cooldownEndTime.isAfter(DateTime.now())) {
       _updateRemainingTime();
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         _updateRemainingTime();
       });
+    } else {
+      ref.read(userDataProvider.notifier).resetAdCount();
     }
   }
 
   void _updateRemainingTime() {
     final userData = ref.read(userDataProvider);
-    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.cooldownEndTime);
+    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.randomTestEntryAdCooldownEndTime); // Doğru cooldown alanı
     final now = DateTime.now();
 
     if (cooldownEndTime.isAfter(now)) {
@@ -169,10 +262,24 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
+  Future<bool> _onWillPop() async {
+    return (await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Testten Çıkmak İstiyor Musunuz?'),
+        content: const Text('Testten çıkarsanız mevcut ilerlemeniz kaybolacaktır.'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Hayır'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Evet'),
+          ),
+        ],
+      ),
+    )) ?? false;
   }
 
   @override
@@ -181,7 +288,21 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
     final userData = ref.watch(userDataProvider);
     final isPremium = userData.isPremium || userData.isLifetimePremium;
 
-    if (testState.status == TestStatus.inProgress) return const _TestView();
+    if (testState.status == TestStatus.inProgress) return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) {
+          return;
+        }
+        final bool shouldPop = await _onWillPop();
+        if (shouldPop) {
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      child: const _TestView(),
+    );
     if (isPremium) return const _PremiumGateScreen();
 
     return Scaffold(
@@ -193,13 +314,16 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
               child: _buildGateScreen(context, userData, _remainingTime),
             ),
           ),
-          Container(
-            alignment: Alignment.center,
-            width: double.infinity,
-            height: 50,
-            color: Colors.grey.shade200,
-            child: const Text('Banner Reklam Alanı'),
-          ),
+          if (!isPremium && _bannerAd != null && _isBannerAdLoaded)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            ),
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -207,10 +331,11 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
 
   Widget _buildGateScreen(BuildContext context, UserData userData, Duration remainingTime) {
     final theme = Theme.of(context);
-    final canWatchAd = userData.rewardedAdWatchCount < 3;
+    final canWatchAd = userData.randomTestEntryAdWatchCount == 0; // Doğru sayaç
 
     if (remainingTime > Duration.zero) {
       String twoDigits(int n) => n.toString().padLeft(2, '0');
+      final hours = twoDigits(remainingTime.inHours);
       final minutes = twoDigits(remainingTime.inMinutes.remainder(60));
       final seconds = twoDigits(remainingTime.inSeconds.remainder(60));
 
@@ -225,7 +350,7 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
             const SizedBox(height: 12),
             Text('Tekrar soru çözebilmek için lütfen aşağıdaki sürenin dolmasını bekleyin.', style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            Text('$minutes:$seconds', style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+            Text('$hours:$minutes:$seconds', style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
           ],
         ),
       );
@@ -244,12 +369,32 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.slow_motion_video),
-              label: Text('Reklam İzle ve Başla (${3 - userData.rewardedAdWatchCount} hakkın kaldı)'),
+              label: Text(
+                canWatchAd
+                    ? (_isRewardedAdLoaded ? 'Reklam İzle ve Başla (1 hakkın kaldı)' : 'Reklam Yükleniyor...')
+                    : 'Bugünlük hakkın doldu',
+              ),
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-              onPressed: canWatchAd ? () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ödüllü reklam izlendi (Simülasyon)')));
-                ref.read(randomTestControllerProvider.notifier).startTestWithAd();
-              } : null,
+              onPressed: canWatchAd && _isRewardedAdLoaded // Reklam yüklendiyse tıklanabilir
+                  ? () {
+                _rewardedAd?.show(onUserEarnedReward: (ad, reward) {
+                  // Burada elmas ödülü VERMİYORUZ. Sadece reklam izlendiğini kaydediyoruz.
+                  final success = ref.read(userDataProvider.notifier).useRandomTestEntryAd(); // Doğru metod
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Reklam izlendi, teste başlayabilirsiniz!')),
+                    );
+                    ref.read(randomTestControllerProvider.notifier).startTestWithAd();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Bugün zaten reklam izlediniz veya bir sorun oluştu.')),
+                    );
+                  }
+                  _loadRewardedAd(); // Yeni bir reklam yükle
+                });
+                _rewardedAd = null;
+              }
+                  : null,
             ),
           ),
         ],
@@ -354,7 +499,7 @@ class _TestView extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: selectedAnswer != null ? () => testController.nextQuestion() : null,
+              onPressed: selectedAnswer != null ? () => testController.nextQuestion(context) : null,
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), textStyle: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
               child: Text(testState.currentQuestionIndex < testState.questions.length - 1 ? 'Sonraki Soru' : 'Bitir'),
             ),
@@ -379,10 +524,14 @@ class _RandomTestFiftyFiftyJokerButton extends ConsumerWidget {
       message: 'İki yanlış şıkkı ele (1 Elmas)',
       child: ActionChip(
         avatar: const Icon(Icons.diamond_outlined, size: 18),
-        // DÜZELTME: Buton metni, maliyeti de içerecek şekilde güncellendi.
-        label: const Text('Joker (1 Elmas)'),
+        label: Text('Joker (1 Elmas) ($diamondCount Elmasın Var)'),
         onPressed: canUseJoker
-            ? () => ref.read(randomTestControllerProvider.notifier).useFiftyFiftyJoker()
+            ? () {
+          ref.read(randomTestControllerProvider.notifier).useFiftyFiftyJoker();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(canUseJoker ? 'İki yanlış şık elendi!' : 'Yeterli elmasınız yok veya joker bu soruda kullanıldı.')),
+          );
+        }
             : null,
       ),
     );

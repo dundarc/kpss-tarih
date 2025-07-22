@@ -5,11 +5,15 @@ import 'package:kpss_tarih_app/core/theme/app_theme.dart';
 import 'package:kpss_tarih_app/core/theme/theme_provider.dart';
 import 'package:kpss_tarih_app/features/navigation/screens/main_navigation.dart';
 import 'package:kpss_tarih_app/data/services/storage_service.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // AdMob için eklendi
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // AdMob SDK'sını başlat
+  await MobileAds.instance.initialize();
 
   final storageService = StorageService();
   await storageService.init();

@@ -3,6 +3,10 @@
         android:label="kpss_tarih_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Google Mobile Ads SDK meta-data tag'i eklendi -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713"/> <!-- Test AdMob Uygulama Kimliği -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

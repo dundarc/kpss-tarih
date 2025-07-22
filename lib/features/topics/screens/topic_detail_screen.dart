@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tarih_app/core/providers/providers.dart';
 import 'package:kpss_tarih_app/data/models/topic_model.dart';
 import 'package:kpss_tarih_app/features/test/screens/test_screen.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // AdMob için eklendi
 
 // Belirli bir konuya ait püf noktasını getiren yeni provider
 final tipsForTopicProvider = FutureProvider.autoDispose.family<String?, String>((ref, topicId) {
@@ -11,20 +12,64 @@ final tipsForTopicProvider = FutureProvider.autoDispose.family<String?, String>(
   return contentService.getTipsForTopic(topicId);
 });
 
-class TopicDetailScreen extends ConsumerWidget {
+class TopicDetailScreen extends ConsumerStatefulWidget { // ConsumerStatefulWidget olarak değiştirildi
   final Topic topic;
   const TopicDetailScreen({super.key, required this.topic});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TopicDetailScreen> createState() => _TopicDetailScreenState();
+}
+
+class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
+  BannerAd? _bannerAd; // Banner reklam nesnesi
+  bool _isBannerAdLoaded = false; // Banner reklamın yüklenip yüklenmediğini kontrol eder
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBannerAd(); // Banner reklamı yükle
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose(); // Reklamı dispose et
+    super.dispose();
+  }
+
+  // Banner reklamı yükleyen metot
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111', // Test Banner Reklam Birimi Kimliği
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          setState(() {
+            _isBannerAdLoaded = true;
+          });
+          print('Banner reklam yüklendi.');
+        },
+        onAdFailedToLoad: (ad, err) {
+          debugPrint('BannerAd failed to load: $err');
+          ad.dispose();
+        },
+        onAdOpened: (ad) => debugPrint('BannerAd opened.'),
+        onAdClosed: (ad) => debugPrint('BannerAd closed.'),
+        onAdImpression: (ad) => debugPrint('BannerAd impression.'),
+      ),
+    )..load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final userData = ref.watch(userDataProvider);
     final isPremium = userData.isPremium || userData.isLifetimePremium;
     final theme = Theme.of(context);
 
-    final bool areTipsUnlocked = userData.unlockedTipsTopicIds.contains(topic.id);
+    final bool areTipsUnlocked = userData.unlockedTipsTopicIds.contains(widget.topic.id); // widget.topic.id olarak değiştirildi
 
     return Scaffold(
-      appBar: AppBar(title: Text(topic.title)),
+      appBar: AppBar(title: Text(widget.topic.title)), // widget.topic.title olarak değiştirildi
       body: Column(
         children: [
           Expanded(
@@ -34,7 +79,7 @@ class TopicDetailScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   MarkdownBody(
-                    data: topic.content,
+                    data: widget.topic.content, // widget.topic.content olarak değiştirildi
                     styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
                       p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
                       h3: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
@@ -44,7 +89,7 @@ class TopicDetailScreen extends ConsumerWidget {
                   const Divider(),
                   const SizedBox(height: 16),
                   // Püf noktası bölümünü yeni provider ile oluştur
-                  _TipsSection(topicId: topic.id, areTipsUnlocked: areTipsUnlocked),
+                  _TipsSection(topicId: widget.topic.id, areTipsUnlocked: areTipsUnlocked), // widget.topic.id olarak değiştirildi
                 ],
               ),
             ),
@@ -61,12 +106,21 @@ class TopicDetailScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (!isPremium)
+                  if (!isPremium && _bannerAd != null && _isBannerAdLoaded) // Sadece premium olmayan kullanıcılar için reklamı göster
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SizedBox(
+                        width: _bannerAd!.size.width.toDouble(),
+                        height: _bannerAd!.size.height.toDouble(),
+                        child: AdWidget(ad: _bannerAd!),
+                      ),
+                    ),
+                  if (!isPremium && (_bannerAd == null || !_isBannerAdLoaded)) // Reklam yüklenirken veya yüklenemediğinde yer tutucu
                     Container(
                       alignment: Alignment.center, width: double.infinity, height: 50,
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
-                      child: const Text('Burada Banner Reklam Gösterilecek'),
+                      child: const Text('Reklam Alanı'),
                     ),
                   SizedBox(
                     width: double.infinity,
@@ -78,7 +132,7 @@ class TopicDetailScreen extends ConsumerWidget {
                         textStyle: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => TestScreen(topicId: topic.id))),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => TestScreen(topicId: widget.topic.id))),
                     ),
                   ),
                 ],
@@ -115,7 +169,7 @@ class _TipsSection extends ConsumerWidget {
         }
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => const Center(child: Text('Püf noktaları yüklenemedi.')),
+      error: (err, stack) => Center(child: Text('Püf noktaları yüklenemedi.')),
     );
   }
 }
