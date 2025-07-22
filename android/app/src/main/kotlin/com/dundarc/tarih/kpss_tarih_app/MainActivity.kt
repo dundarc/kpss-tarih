@@ -1,4 +1,4 @@
-package com.dundarc.tarih.kpss_tarih_app
+package com.dundarc.tarih
 
 import io.flutter.embedding.android.FlutterActivity
 

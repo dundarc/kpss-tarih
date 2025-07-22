@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="com.android.vending.BILLING" />
     <application
-        android:label="kpss_tarih_app"
+        android:label="KPSS Tarih"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- Google Mobile Ads SDK meta-data tag'i eklendi -->

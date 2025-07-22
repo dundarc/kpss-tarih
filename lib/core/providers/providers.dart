@@ -4,6 +4,11 @@ import 'package:kpss_tarih_app/data/services/storage_service.dart';
 import 'package:kpss_tarih_app/data/services/content_service.dart';
 import 'package:kpss_tarih_app/data/services/purchase_service.dart'; // PurchaseService için eklendi
 import 'package:in_app_purchase/in_app_purchase.dart'; // PurchaseDetails için eklendi
+import 'package:flutter/material.dart'; // ChangeNotifier ve SnackBar için
+
+// main.dart'tan gelen GlobalKey'e erişim için
+import 'package:kpss_tarih_app/main.dart';
+
 
 final storageServiceProvider = Provider<StorageService>((ref) => StorageService());
 final contentServiceProvider = Provider<ContentService>((ref) => ContentService());
@@ -13,8 +18,10 @@ final mainNavigationSelectedIndexProvider = StateProvider<int>((ref) => 0);
 
 class UserDataNotifier extends StateNotifier<UserData> {
   final StorageService _storageService;
+  // Ref'i sadece provider'lara erişim için tutuyoruz, context için değil.
+  final Ref _ref;
 
-  UserDataNotifier(this._storageService) : super(_storageService.getUserData());
+  UserDataNotifier(this._storageService, this._ref) : super(_storageService.getUserData());
 
   // State'i güncellemeyi kolaylaştıran yardımcı fonksiyon
   UserData _newState({
@@ -259,14 +266,32 @@ class UserDataNotifier extends StateNotifier<UserData> {
           break;
       }
       _storageService.updateUserData(state);
+      // UI'a bildirim göndermek için SnackBar gösterebiliriz
+      // GlobalKey üzerinden context'e erişim
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${purchaseDetails.productID} başarıyla satın alındı/geri yüklendi!')),
+        );
+      }
+      _ref.read(mainNavigationSelectedIndexProvider.notifier).state = 0; // Ana sayfaya dön
     }
-    // Diğer durumlar (pending, error, canceled) PurchaseService içinde işleniyor
+  }
+
+  // YENİ: Satın alma hatalarını işleyen metot
+  void handlePurchaseError(String errorMessage) {
+    final context = navigatorKey.currentContext;
+    if (context != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Satın alma hatası: $errorMessage')),
+      );
+    }
   }
 }
 
 final userDataProvider = StateNotifierProvider<UserDataNotifier, UserData>((ref) {
   final storageService = ref.watch(storageServiceProvider);
-  return UserDataNotifier(storageService);
+  return UserDataNotifier(storageService, ref); // ref'i de iletiyoruz
 });
 
 extension DateExtension on DateTime {
@@ -276,18 +301,14 @@ extension DateExtension on DateTime {
 }
 
 // YENİ: PurchaseService'i sağlayan provider
-final purchaseServiceProvider = Provider<PurchaseService>((ref) {
+final purchaseServiceProvider = ChangeNotifierProvider<PurchaseService>((ref) {
   final userDataNotifier = ref.read(userDataProvider.notifier);
   return PurchaseService(
-    onPurchaseSuccess: (purchaseDetails) {
+    onPurchaseSuccessCallback: (purchaseDetails) {
       userDataNotifier.handlePurchase(purchaseDetails);
-      // UI'da SnackBar göstermek için burada bir callback tetiklenebilir
-      // veya SnackBar doğrudan PurchaseService'in çağrıldığı UI katmanında gösterilebilir.
     },
-    onPurchaseError: (errorMessage) {
-      // UI'da SnackBar göstermek için burada bir callback tetiklenebilir
-      // veya SnackBar doğrudan PurchaseService'in çağrıldığı UI katmanında gösterilebilir.
-      print('Satın alma hatası: $errorMessage');
+    onPurchaseErrorCallback: (errorMessage) {
+      userDataNotifier.handlePurchaseError(errorMessage);
     },
   );
 });

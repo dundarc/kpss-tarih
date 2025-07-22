@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tarih_app/main.dart'; // navigatorKey'e erişmek için eklendi
-import 'package:kpss_tarih_app/core/providers/providers.dart'; // UserDataProvider ve storeProductDetailsProvider için eklendi
 import 'dart:async'; // Timer için eklendi
 import 'package:google_mobile_ads/google_mobile_ads.dart'; // AdMob için eklendi
 import 'package:in_app_purchase/in_app_purchase.dart'; // ProductDetails için eklendi
+// in_app_purchase_android artık doğrudan kullanılmadığı için kaldırılabilir
+// import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:kpss_tarih_app/core/providers/providers.dart'; // Tüm provider'lar için eklendi
+import 'package:kpss_tarih_app/data/services/purchase_service.dart'; // PurchaseStatusEnum için
 
 // Bu ID'ler, Google Play Console ve App Store Connect'te oluşturduğunuz
 // ürün ID'leri ile birebir aynı olmalıdır.
@@ -16,16 +19,73 @@ const String elmas100Id = '100_elmas_49_99tl'; // Örnek: 150 TL yerine 49.99 TL
 const String elmas250Id = '250_elmas_99_99tl'; // Örnek: 250 TL yerine 99.99 TL
 const String elmas500Id = '500_elmas_179_99tl'; // Örnek: 400 TL yerine 179.99 TL
 
+/// ProductDetails arayüzünü uygulayan basit bir yer tutucu sınıfı.
+/// Gerçek ürün detayları yüklenemediğinde veya test ortamlarında kullanılır.
+class _MockProductDetails implements ProductDetails {
+  @override
+  final String id;
+  @override
+  final String title;
+  @override
+  final String description;
+  @override
+  final String price;
+  @override
+  final double rawPrice;
+  @override
+  final String currencyCode;
+
+  // ProductDetails soyut sınıfının tüm üyelerini implement etmeliyiz.
+  // Çoğu durumda, yer tutucu için boş veya varsayılan değerler yeterlidir.
+  @override
+  final String currencySymbol;
+  @override
+  final String? subscriptionPeriod;
+  @override
+  final String? introductoryPrice;
+  @override
+  final int? introductoryPriceAmountMicros;
+  @override
+  final String? introductoryPriceCycles;
+  @override
+  final String? introductoryPricePeriod;
+  @override
+  final String? freeTrialPeriod;
+  @override
+  final double? originalPriceAmountMicros;
+  @override
+  final String? originalPrice;
+
+  _MockProductDetails({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.price,
+    required this.rawPrice,
+    required this.currencyCode,
+    this.currencySymbol = '₺', // Varsayılan sembol
+    this.subscriptionPeriod,
+    this.introductoryPrice,
+    this.introductoryPriceAmountMicros,
+    this.introductoryPriceCycles,
+    this.introductoryPricePeriod,
+    this.freeTrialPeriod,
+    this.originalPriceAmountMicros,
+    this.originalPrice,
+  });
+}
+
+
 class StoreScreen extends ConsumerWidget {
   const StoreScreen({super.key});
 
-  // Satın alma işlemini tetikleyecek fonksiyon (gerçek satın alma entegrasyonu için)
+  // Satın alma işlemini tetikleyecek fonksiyon
   void _buyProduct(BuildContext context, WidgetRef ref, ProductDetails productDetails) async {
     final purchaseService = ref.read(purchaseServiceProvider);
     await purchaseService.buyProduct(productDetails);
   }
 
-  // Satın alma onay pop-up'ını gösteren yeni fonksiyon
+  // Satın alma onay pop-up'ını gösteren fonksiyon
   void _showPurchaseConfirmationPopup(BuildContext context, WidgetRef ref, ProductDetails productDetails, String title, String price, String description) {
     final theme = Theme.of(context);
     showDialog(
@@ -105,7 +165,69 @@ class StoreScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final storeProductsAsync = ref.watch(storeProductDetailsProvider); // Ürün detaylarını dinle
+    // PurchaseService'in durumunu ve ürünlerini dinle
+    final purchaseService = ref.watch(purchaseServiceProvider);
+    final products = purchaseService.products;
+    final purchaseStatus = purchaseService.status;
+    final errorMessage = purchaseService.errorMessage;
+
+    // Ürünler yüklenirken veya hata durumunda gösterilecek UI
+    if (purchaseStatus == PurchaseStatusEnum.loading) {
+      return const Center(child: CircularProgressIndicator());
+    } else if (purchaseStatus == PurchaseStatusEnum.error || purchaseStatus == PurchaseStatusEnum.unavailable) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 60, color: theme.colorScheme.error),
+              const SizedBox(height: 16),
+              Text(
+                'Mağaza Yüklenemedi',
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                errorMessage ?? 'Bir sorun oluştu. Lütfen daha sonra tekrar deneyin.',
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  // Yeniden yüklemeyi tetikle
+                  purchaseService.restorePurchases(); // Veya doğrudan _initialize() çağrılabilir
+                },
+                child: const Text('Tekrar Dene'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (purchaseStatus == PurchaseStatusEnum.purchasing) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Satın alma işlemi devam ediyor...'),
+          ],
+        ),
+      );
+    }
+
+    // Ürünler başarıyla yüklendiğinde ve mağaza kullanılabilir olduğunda
+    // Ürünleri bulmak için firstWhere kullanırken, orElse'e _MockProductDetails tipinde bir nesne döndürüyoruz.
+    final aylikProduct = products.firstWhere((p) => p.id == aylikAbonelikId, orElse: () => _createPlaceholderProduct(aylikAbonelikId, 'Aylık Abonelik', '39.99 TL'));
+    final yillikProduct = products.firstWhere((p) => p.id == yillikAbonelikId, orElse: () => _createPlaceholderProduct(yillikAbonelikId, 'Yıllık Abonelik', '299.99 TL'));
+    final omurBoyuProduct = products.firstWhere((p) => p.id == omurBoyuId, orElse: () => _createPlaceholderProduct(omurBoyuId, 'Ömür Boyu Premium', '749.99 TL'));
+    final elmas100Product = products.firstWhere((p) => p.id == elmas100Id, orElse: () => _createPlaceholderProduct(elmas100Id, '100 Elmas', '49.99 TL'));
+    final elmas250Product = products.firstWhere((p) => p.id == elmas250Id, orElse: () => _createPlaceholderProduct(elmas250Id, '250 Elmas', '99.99 TL'));
+    final elmas500Product = products.firstWhere((p) => p.id == elmas500Id, orElse: () => _createPlaceholderProduct(elmas500Id, '500 Elmas', '179.99 TL'));
+
 
     return Scaffold(
       body: ListView(
@@ -122,47 +244,37 @@ class StoreScreen extends ConsumerWidget {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          storeProductsAsync.when(
-            data: (products) {
-              final aylikProduct = products.firstWhere((p) => p.id == aylikAbonelikId, orElse: () => _createPlaceholderProduct(aylikAbonelikId, 'Aylık Abonelik', '39.99 TL'));
-              final yillikProduct = products.firstWhere((p) => p.id == yillikAbonelikId, orElse: () => _createPlaceholderProduct(yillikAbonelikId, 'Yıllık Abonelik', '299.99 TL'));
-              final omurBoyuProduct = products.firstWhere((p) => p.id == omurBoyuId, orElse: () => _createPlaceholderProduct(omurBoyuId, 'Ömür Boyu Premium', '749.99 TL'));
-
-              return Column(
-                children: [
-                  _SubscriptionCard(
-                    key: ValueKey(aylikProduct.id), // Benzersiz anahtar eklendi
-                    title: aylikProduct.title,
-                    price: aylikProduct.price,
-                    description: 'Her ay yenilenir.',
-                    color: Colors.teal,
-                    icon: Icons.calendar_month,
-                    onTap: () => _showPurchaseConfirmationPopup(context, ref, aylikProduct, aylikProduct.title, aylikProduct.price, 'Her ay otomatik olarak yenilenir. Reklamsız deneyim sunar.'),
-                  ),
-                  _SubscriptionCard(
-                    key: ValueKey(yillikProduct.id), // Benzersiz anahtar eklendi
-                    title: yillikProduct.title,
-                    price: yillikProduct.price,
-                    description: 'Yıllık öde, tasarruf et!',
-                    color: Colors.orange,
-                    isPopular: true,
-                    icon: Icons.star, // Güncellendi
-                    onTap: () => _showPurchaseConfirmationPopup(context, ref, yillikProduct, yillikProduct.title, yillikProduct.price, 'Yıllık ödeme ile daha uygun fiyata reklamsız deneyim.'),
-                  ),
-                  _SubscriptionCard(
-                    key: ValueKey(omurBoyuProduct.id), // Benzersiz anahtar eklendi
-                    title: omurBoyuProduct.title,
-                    price: omurBoyuProduct.price,
-                    description: 'Tek sefer öde, sonsuza dek kullan.',
-                    color: Colors.purple,
-                    icon: Icons.rocket_launch,
-                    onTap: () => _showPurchaseConfirmationPopup(context, ref, omurBoyuProduct, omurBoyuProduct.title, omurBoyuProduct.price, 'Tek seferlik ödeme ile sınırsız reklamsız erişim.'),
-                  ),
-                ],
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stack) => Center(child: Text('Ürünler yüklenemedi: $err')),
+          Column(
+            children: [
+              _SubscriptionCard(
+                key: ValueKey(aylikProduct.id), // Benzersiz anahtar eklendi
+                title: aylikProduct.title,
+                price: aylikProduct.price,
+                description: 'Her ay yenilenir.',
+                color: Colors.teal,
+                icon: Icons.calendar_month,
+                onTap: () => _showPurchaseConfirmationPopup(context, ref, aylikProduct, aylikProduct.title, aylikProduct.price, 'Her ay otomatik olarak yenilenir. Reklamsız deneyim sunar.'),
+              ),
+              _SubscriptionCard(
+                key: ValueKey(yillikProduct.id), // Benzersiz anahtar eklendi
+                title: yillikProduct.title,
+                price: yillikProduct.price,
+                description: 'Yıllık öde, tasarruf et!',
+                color: Colors.orange,
+                isPopular: true,
+                icon: Icons.star, // Güncellendi
+                onTap: () => _showPurchaseConfirmationPopup(context, ref, yillikProduct, yillikProduct.title, yillikProduct.price, 'Yıllık ödeme ile daha uygun fiyata reklamsız deneyim.'),
+              ),
+              _SubscriptionCard(
+                key: ValueKey(omurBoyuProduct.id), // Benzersiz anahtar eklendi
+                title: omurBoyuProduct.title,
+                price: omurBoyuProduct.price,
+                description: 'Tek sefer öde, sonsuza dek kullan.',
+                color: Colors.purple,
+                icon: Icons.rocket_launch,
+                onTap: () => _showPurchaseConfirmationPopup(context, ref, omurBoyuProduct, omurBoyuProduct.title, omurBoyuProduct.price, 'Tek seferlik ödeme ile sınırsız reklamsız erişim.'),
+              ),
+            ],
           ),
           const SizedBox(height: 32),
 
@@ -191,46 +303,36 @@ class StoreScreen extends ConsumerWidget {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          storeProductsAsync.when(
-            data: (products) {
-              final elmas100Product = products.firstWhere((p) => p.id == elmas100Id, orElse: () => _createPlaceholderProduct(elmas100Id, '100 Elmas', '49.99 TL'));
-              final elmas250Product = products.firstWhere((p) => p.id == elmas250Id, orElse: () => _createPlaceholderProduct(elmas250Id, '250 Elmas', '99.99 TL'));
-              final elmas500Product = products.firstWhere((p) => p.id == elmas500Id, orElse: () => _createPlaceholderProduct(elmas500Id, '500 Elmas', '179.99 TL'));
-
-              return GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.85,
-                children: [
-                  _DiamondCard(
-                    key: ValueKey(elmas100Product.id), // Benzersiz anahtar eklendi
-                    diamondAmount: 100,
-                    price: elmas100Product.price,
-                    icon: Icons.diamond,
-                    onTap: () => _showPurchaseConfirmationPopup(context, ref, elmas100Product, elmas100Product.title, elmas100Product.price, '100 Elmas paketi.'),
-                  ),
-                  _DiamondCard(
-                    key: ValueKey(elmas250Product.id), // Benzersiz anahtar eklendi
-                    diamondAmount: 250,
-                    price: elmas250Product.price,
-                    icon: Icons.diamond,
-                    onTap: () => _showPurchaseConfirmationPopup(context, ref, elmas250Product, elmas250Product.title, elmas250Product.price, '250 Elmas paketi.'),
-                  ),
-                  _DiamondCard(
-                    key: ValueKey(elmas500Product.id), // Benzersiz anahtar eklendi
-                    diamondAmount: 500,
-                    price: elmas500Product.price,
-                    icon: Icons.diamond,
-                    onTap: () => _showPurchaseConfirmationPopup(context, ref, elmas500Product, elmas500Product.title, elmas500Product.price, '500 Elmas paketi.'),
-                  ),
-                ],
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stack) => Center(child: Text('Elmas paketleri yüklenemedi: $err')),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.85,
+            children: [
+              _DiamondCard(
+                key: ValueKey(elmas100Product.id), // Benzersiz anahtar eklendi
+                diamondAmount: 100,
+                price: elmas100Product.price,
+                icon: Icons.diamond,
+                onTap: () => _showPurchaseConfirmationPopup(context, ref, elmas100Product, elmas100Product.title, elmas100Product.price, '100 Elmas paketi.'),
+              ),
+              _DiamondCard(
+                key: ValueKey(elmas250Product.id), // Benzersiz anahtar eklendi
+                diamondAmount: 250,
+                price: elmas250Product.price,
+                icon: Icons.diamond,
+                onTap: () => _showPurchaseConfirmationPopup(context, ref, elmas250Product, elmas250Product.title, elmas250Product.price, '250 Elmas paketi.'),
+              ),
+              _DiamondCard(
+                key: ValueKey(elmas500Product.id), // Benzersiz anahtar eklendi
+                diamondAmount: 500,
+                price: elmas500Product.price,
+                icon: Icons.diamond,
+                onTap: () => _showPurchaseConfirmationPopup(context, ref, elmas500Product, elmas500Product.title, elmas500Product.price, '500 Elmas paketi.'),
+              ),
+            ],
           ),
         ],
       ),
@@ -238,14 +340,25 @@ class StoreScreen extends ConsumerWidget {
   }
 
   // Ürün detayları yüklenemediğinde yer tutucu bir ProductDetails nesnesi oluşturur.
+  // Bu fonksiyon sadece ürünler yüklenemediğinde bir fallback olarak kullanılır.
   ProductDetails _createPlaceholderProduct(String id, String title, String price) {
-    return ProductDetails(
+    // _MockProductDetails sınıfını kullanarak ProductDetails arayüzünü implement ediyoruz.
+    return _MockProductDetails(
       id: id,
       title: title,
       description: 'Ürün bilgisi yüklenemedi.',
       price: price,
       rawPrice: 0.0,
       currencyCode: 'TL',
+      currencySymbol: '₺',
+      originalPrice: price,
+      originalPriceAmountMicros: 0,
+      subscriptionPeriod: null, // Nullable olduğu için null geçilebilir
+      introductoryPrice: null,
+      introductoryPriceAmountMicros: null,
+      introductoryPriceCycles: null,
+      introductoryPricePeriod: null,
+      freeTrialPeriod: null,
     );
   }
 }
@@ -328,6 +441,7 @@ class _DiamondCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Card(
       elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
@@ -369,6 +483,9 @@ class _RewardedAdCard extends ConsumerStatefulWidget {
 class _RewardedAdCardState extends ConsumerState<_RewardedAdCard> {
   RewardedAd? _rewardedAd;
   bool _isRewardedAdLoading = false;
+  // `_isRewardedAdLoaded` artık burada tanımlı ve kullanılıyor.
+  // Bu değişken sadece reklamın yüklenip yüklenmediğini takip eder.
+  bool _isRewardedAdLoaded = false;
   Timer? _timer;
   Duration _remainingTime = Duration.zero;
 
@@ -397,6 +514,8 @@ class _RewardedAdCardState extends ConsumerState<_RewardedAdCard> {
   void _loadRewardedAd() {
     setState(() {
       _isRewardedAdLoading = true;
+      _isRewardedAdLoaded = false; // Yükleme başladığında false olarak ayarla
+      _rewardedAd = null; // Önceki reklamı temizle
     });
     RewardedAd.load(
       adUnitId: 'ca-app-pub-3940256099942544/5224354917',
@@ -406,15 +525,18 @@ class _RewardedAdCardState extends ConsumerState<_RewardedAdCard> {
           setState(() {
             _rewardedAd = ad;
             _isRewardedAdLoading = false;
+            _isRewardedAdLoaded = true; // Reklam yüklendiğinde true olarak ayarla
           });
           print('Rewarded reklam yüklendi.');
         },
-        onAdFailedToLoad: (err) {
-          debugPrint('RewardedAd failed to load: $err');
+        onAdFailedToLoad: (LoadAdError error) { // `ad` parametresi kaldırıldı, `error` tipi düzeltildi
+          debugPrint('RewardedAd failed to load: $error');
           setState(() {
+            _isRewardedAdLoaded = false; // Yükleme başarısız oldu
             _rewardedAd = null;
-            _isRewardedAdLoading = false;
           });
+          // `ad.dispose()` çağrısı kaldırıldı, çünkü `error` nesnesinde dispose metodu yoktur.
+          // Yükleme başarısız olduğunda reklam nesnesi zaten oluşmamış veya geçersizdir.
         },
       ),
     );
@@ -462,6 +584,7 @@ class _RewardedAdCardState extends ConsumerState<_RewardedAdCard> {
     if (_remainingTime > Duration.zero) {
       String twoDigits(int n) => n.toString().padLeft(2, '0');
       final hours = twoDigits(_remainingTime.inHours);
+      // `remainder` yerine `inMinutes.remainder` ve `inSeconds.remainder` kullanıldı
       final minutes = twoDigits(_remainingTime.inMinutes.remainder(60));
       final seconds = twoDigits(_remainingTime.inSeconds.remainder(60));
       buttonText = 'Sonraki Reklam: $hours:$minutes:$seconds';
@@ -469,7 +592,7 @@ class _RewardedAdCardState extends ConsumerState<_RewardedAdCard> {
     } else if (_isRewardedAdLoading) {
       buttonText = 'Reklam Yükleniyor...';
       onPressed = null;
-    } else if (_rewardedAd != null && canWatchAd) {
+    } else if (_rewardedAd != null && canWatchAd && _isRewardedAdLoaded) { // `_isRewardedAdLoaded` kontrolü eklendi
       buttonText = 'Reklam İzle ve 5 Elmas Kazan';
       onPressed = () {
         _rewardedAd?.show(onUserEarnedReward: (ad, reward) {
