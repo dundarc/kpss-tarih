@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tarih_app/core/providers/providers.dart';
 import 'package:kpss_tarih_app/data/models/question_model.dart';
 import 'package:kpss_tarih_app/data/models/user_data_model.dart';
-import 'package:kpss_tarih_app/features/test/screens/test_result_screen.dart'; // TestResultScreen'ı kullanmak için eklendi
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // AdMob için eklendi
+import 'package:kpss_tarih_app/features/store/models/user_plan.dart';
+import 'package:kpss_tarih_app/features/store/providers/store_providers.dart';
+import 'package:kpss_tarih_app/features/test/screens/test_result_screen.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 // --- STATE MANAGEMENT ---
 
@@ -25,8 +27,8 @@ class TestState {
   final List<int?> selectedAnswers;
   final int currentQuestionIndex;
   final TestStatus status;
-  final bool isJokerUsed; // JOKER
-  final List<int> eliminatedOptions; // JOKER
+  final bool isJokerUsed;
+  final List<int> eliminatedOptions;
 
   TestState({
     this.questions = const [],
@@ -73,8 +75,6 @@ class RandomTestController extends StateNotifier<TestState> {
   }
 
   void startTestWithAd() {
-    // Reklam izleme ve elmas kazanma mantığı UserDataNotifier'a taşındı.
-    // Burada sadece testi başlatıyoruz.
     _prepareAndStartTest();
   }
 
@@ -90,8 +90,9 @@ class RandomTestController extends StateNotifier<TestState> {
     }
   }
 
-  void useFiftyFiftyJoker() {
-    final success = _ref.read(userDataProvider.notifier).spendDiamonds(1);
+  // *** HATA DÜZELTMESİ: Fonksiyon 'async' yapıldı ve 'await' eklendi. ***
+  Future<void> useFiftyFiftyJoker() async {
+    final success = await _ref.read(diamondNotifierProvider.notifier).spendDiamonds(1);
     if (success) {
       final currentQuestion = state.questions[state.currentQuestionIndex];
       final correctAnswerIndex = currentQuestion.correctAnswerIndex;
@@ -163,14 +164,9 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
   void initState() {
     super.initState();
     _loadBannerAd();
-    _loadRewardedAd(); // Ödüllü reklamı yükle
+    _loadRewardedAd();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // ref.listen'ı artık burada çağırılıyor
-      ref.listen<int>(userDataProvider.select((data) => data.randomTestEntryAdCooldownEndTime), (previous, next) {
-        _startTimerIfNeeded(); // Cooldown değiştiğinde sayacı yeniden başlat
-        _loadRewardedAd(); // Cooldown değiştiğinde reklamı yeniden yüklemeye çalış
-      });
-      _startTimerIfNeeded(); // İlk sayaç başlatma
+      _startTimerIfNeeded();
     });
   }
 
@@ -189,25 +185,22 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
       size: AdSize.banner,
       listener: BannerAdListener(
         onAdLoaded: (ad) {
+          if (!mounted) return;
           setState(() {
             _isBannerAdLoaded = true;
           });
-          print('Banner reklam yüklendi.');
         },
         onAdFailedToLoad: (ad, err) {
           debugPrint('BannerAd failed to load: $err');
           ad.dispose();
         },
-        onAdOpened: (ad) => debugPrint('BannerAd opened.'),
-        onAdClosed: (ad) => debugPrint('BannerAd closed.'),
-        onAdImpression: (ad) => debugPrint('BannerAd impression.'),
       ),
     )..load();
   }
 
   void _loadRewardedAd() {
     setState(() {
-      _isRewardedAdLoaded = false; // Yükleme başladı (önceki reklamı sıfırla)
+      _isRewardedAdLoaded = false;
       _rewardedAd = null;
     });
     RewardedAd.load(
@@ -215,14 +208,15 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
+          if (!mounted) return;
           setState(() {
             _rewardedAd = ad;
             _isRewardedAdLoaded = true;
           });
-          print('Rewarded reklam yüklendi.');
         },
         onAdFailedToLoad: (err) {
           debugPrint('RewardedAd failed to load: $err');
+          if (!mounted) return;
           setState(() {
             _isRewardedAdLoaded = false;
             _rewardedAd = null;
@@ -234,10 +228,11 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
 
   void _startTimerIfNeeded() {
     final userData = ref.read(userDataProvider);
-    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.randomTestEntryAdCooldownEndTime); // Doğru cooldown alanı
+    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.randomTestEntryAdCooldownEndTime);
 
     if (cooldownEndTime.isAfter(DateTime.now())) {
       _updateRemainingTime();
+      _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         _updateRemainingTime();
       });
@@ -248,7 +243,7 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
 
   void _updateRemainingTime() {
     final userData = ref.read(userDataProvider);
-    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.randomTestEntryAdCooldownEndTime); // Doğru cooldown alanı
+    final cooldownEndTime = DateTime.fromMillisecondsSinceEpoch(userData.randomTestEntryAdCooldownEndTime);
     final now = DateTime.now();
 
     if (cooldownEndTime.isAfter(now)) {
@@ -284,27 +279,33 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(userDataProvider.select((data) => data.randomTestEntryAdCooldownEndTime), (previous, next) {
+      if (previous != next) {
+        _startTimerIfNeeded();
+        _loadRewardedAd();
+      }
+    });
+
     final testState = ref.watch(randomTestControllerProvider);
-    final userData = ref.watch(userDataProvider);
-    final isPremium = userData.isPremium || userData.isLifetimePremium;
+
+    final userPlan = ref.watch(userPlanProvider);
+    final isPremium = userPlan != UserPlan.free;
 
     if (testState.status == TestStatus.inProgress) return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
-        if (didPop) {
-          return;
-        }
+        if (didPop) return;
         final bool shouldPop = await _onWillPop();
-        if (shouldPop) {
-          if (mounted) {
-            Navigator.of(context).pop();
-          }
+        if (shouldPop && mounted) {
+          Navigator.of(context).pop();
         }
       },
       child: const _TestView(),
     );
+
     if (isPremium) return const _PremiumGateScreen();
 
+    final userData = ref.watch(userDataProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Rastgele Sorular')),
       body: Column(
@@ -331,7 +332,7 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
 
   Widget _buildGateScreen(BuildContext context, UserData userData, Duration remainingTime) {
     final theme = Theme.of(context);
-    final canWatchAd = userData.randomTestEntryAdWatchCount == 0; // Doğru sayaç
+    final canWatchAd = userData.randomTestEntryAdWatchCount == 0;
 
     if (remainingTime > Duration.zero) {
       String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -375,11 +376,10 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
                     : 'Bugünlük hakkın doldu',
               ),
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-              onPressed: canWatchAd && _isRewardedAdLoaded // Reklam yüklendiyse tıklanabilir
+              onPressed: canWatchAd && _isRewardedAdLoaded
                   ? () {
                 _rewardedAd?.show(onUserEarnedReward: (ad, reward) {
-                  // Burada elmas ödülü VERMİYORUZ. Sadece reklam izlendiğini kaydediyoruz.
-                  final success = ref.read(userDataProvider.notifier).useRandomTestEntryAd(); // Doğru metod
+                  final success = ref.read(userDataProvider.notifier).useRandomTestEntryAd();
                   if (success) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Reklam izlendi, teste başlayabilirsiniz!')),
@@ -390,7 +390,7 @@ class _RandomTestScreenState extends ConsumerState<RandomTestScreen> {
                       const SnackBar(content: Text('Bugün zaten reklam izlediniz veya bir sorun oluştu.')),
                     );
                   }
-                  _loadRewardedAd(); // Yeni bir reklam yükle
+                  _loadRewardedAd();
                 });
                 _rewardedAd = null;
               }
@@ -514,7 +514,7 @@ class _RandomTestFiftyFiftyJokerButton extends ConsumerWidget {
   const _RandomTestFiftyFiftyJokerButton();
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final diamondCount = ref.watch(userDataProvider.select((d) => d.diamondCount));
+    final diamondCount = ref.watch(diamondNotifierProvider);
     final testState = ref.watch(randomTestControllerProvider);
     final isAnswered = testState.selectedAnswers[testState.currentQuestionIndex] != null;
 
@@ -524,12 +524,12 @@ class _RandomTestFiftyFiftyJokerButton extends ConsumerWidget {
       message: 'İki yanlış şıkkı ele (1 Elmas)',
       child: ActionChip(
         avatar: const Icon(Icons.diamond_outlined, size: 18),
-        label: Text('Joker (1 Elmas) ($diamondCount Elmasın Var)'),
+        label: Text('Joker ($diamondCount)'),
         onPressed: canUseJoker
             ? () {
           ref.read(randomTestControllerProvider.notifier).useFiftyFiftyJoker();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(canUseJoker ? 'İki yanlış şık elendi!' : 'Yeterli elmasınız yok veya joker bu soruda kullanıldı.')),
+            const SnackBar(content: Text('İki yanlış şık elendi!')),
           );
         }
             : null,

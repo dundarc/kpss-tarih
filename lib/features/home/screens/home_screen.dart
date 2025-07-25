@@ -3,17 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tarih_app/core/providers/providers.dart';
 import 'package:kpss_tarih_app/features/home/providers/home_providers.dart';
 import 'package:kpss_tarih_app/features/random_test/screens/random_test_screen.dart';
-import 'package:kpss_tarih_app/features/topics/screens/category_list_screen.dart';
-import 'package:kpss_tarih_app/features/store/screens/store_screen.dart'; // Mağaza ekranına yönlendirme için eklendi
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // AdMob için eklendi
+import 'package:kpss_tarih_app/features/store/models/user_plan.dart';
+import 'package:kpss_tarih_app/features/store/providers/store_providers.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-// Ana sayfada toplam konu sayısını göstermek için yeni provider
+// Ana sayfada toplam konu sayısını göstermek için provider
 final totalTopicsCountProvider = FutureProvider<int>((ref) async {
   final contentService = ref.watch(contentServiceProvider);
   return await contentService.getTotalTopicsCount();
 });
 
-class HomeScreen extends ConsumerStatefulWidget { // ConsumerStatefulWidget olarak değiştirildi
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
@@ -21,41 +21,37 @@ class HomeScreen extends ConsumerStatefulWidget { // ConsumerStatefulWidget olar
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  BannerAd? _bannerAd; // Banner reklam nesnesi
-  bool _isBannerAdLoaded = false; // Banner reklamın yüklenip yüklenmediğini kontrol eder
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _loadBannerAd(); // Banner reklamı yükle
+    _loadBannerAd();
   }
 
   @override
   void dispose() {
-    _bannerAd?.dispose(); // Reklamı dispose et
+    _bannerAd?.dispose();
     super.dispose();
   }
 
-  // Banner reklamı yükleyen metot
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-3940256099942544/6300978111', // Test Banner Reklam Birimi Kimliği
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111', // Test ID
       request: const AdRequest(),
       size: AdSize.banner,
       listener: BannerAdListener(
         onAdLoaded: (ad) {
+          if (!mounted) return;
           setState(() {
             _isBannerAdLoaded = true;
           });
-          print('Home screen banner reklam yüklendi.');
         },
         onAdFailedToLoad: (ad, err) {
-          debugPrint('Home screen BannerAd failed to load: $err');
+          debugPrint('BannerAd failed to load: $err');
           ad.dispose();
         },
-        onAdOpened: (ad) => debugPrint('Home screen BannerAd opened.'),
-        onAdClosed: (ad) => debugPrint('Home screen BannerAd closed.'),
-        onAdImpression: (ad) => debugPrint('Home screen BannerAd impression.'),
       ),
     )..load();
   }
@@ -65,10 +61,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final totalTopicsAsync = ref.watch(totalTopicsCountProvider);
     final userData = ref.watch(userDataProvider);
     final theme = Theme.of(context);
-    final isPremium = userData.isPremium || userData.isLifetimePremium; // Premium durumunu kontrol et
+
+    final userPlan = ref.watch(userPlanProvider);
 
     return Scaffold(
-      // AppBar buradan kaldırıldı, artık MainNavigation tarafından sağlanıyor.
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
@@ -86,11 +82,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 24),
           const _QuickActions(),
           const SizedBox(height: 24),
-          const _DailyTasksSection(), // YENİ: Günlük görevler bölümü eklendi
-          const SizedBox(height: 24),
           const _TodayInHistoryCard(),
-          const SizedBox(height: 24), // Reklam alanı için boşluk
-          if (!isPremium && _bannerAd != null && _isBannerAdLoaded) // Sadece premium olmayan kullanıcılar için reklamı göster
+          const SizedBox(height: 24),
+          const _DailyTasksSection(),
+          const SizedBox(height: 24),
+
+          if (userPlan == UserPlan.free && _bannerAd != null && _isBannerAdLoaded)
             Align(
               alignment: Alignment.bottomCenter,
               child: SizedBox(
@@ -98,15 +95,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 height: _bannerAd!.size.height.toDouble(),
                 child: AdWidget(ad: _bannerAd!),
               ),
-            ),
-          if (!isPremium && (_bannerAd == null || !_isBannerAdLoaded)) // Reklam yüklenirken veya yüklenemediğinde yer tutucu
-            Container(
-              alignment: Alignment.center,
-              width: double.infinity,
-              height: 50,
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
-              child: const Text('Reklam Alanı'),
             ),
         ],
       ),
@@ -148,17 +136,16 @@ class _ProgressCard extends StatelessWidget {
   }
 }
 
-class _QuickActions extends ConsumerWidget { // ConsumerWidget yapıldı
+class _QuickActions extends ConsumerWidget {
   const _QuickActions();
   @override
-  Widget build(BuildContext context, WidgetRef ref) { // WidgetRef eklendi
+  Widget build(BuildContext context, WidgetRef ref) {
     return Row(
       children: [
         Expanded(
           child: _ActionCard(
             title: 'Konulara Göz At', icon: Icons.menu_book_rounded, color: Colors.blue,
             onTap: () {
-              // Navigator.push yerine tab değişimi yapıldı
               ref.read(mainNavigationSelectedIndexProvider.notifier).state = 1;
             },
           ),
@@ -239,7 +226,6 @@ class _TodayInHistoryCard extends ConsumerWidget {
   }
 }
 
-// YENİ WIDGET: Günlük Görevler Bölümü
 class _DailyTasksSection extends ConsumerWidget {
   const _DailyTasksSection();
 
@@ -247,7 +233,10 @@ class _DailyTasksSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final userData = ref.watch(userDataProvider);
-    final isPremium = userData.isPremium || userData.isLifetimePremium; // Premium durumunu kontrol et
+    final userPlan = ref.watch(userPlanProvider);
+    final isPremium = userPlan != UserPlan.free;
+
+
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +246,6 @@ class _DailyTasksSection extends ConsumerWidget {
           style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        // Görev 1: Uygulamada Geçirilen Süre
         Card(
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: theme.dividerColor.withOpacity(0.5))),
@@ -279,22 +267,21 @@ class _DailyTasksSection extends ConsumerWidget {
                 if (userData.timeSpentMinutesToday >= 20 && !userData.dailyTimeRewardClaimed)
                   ElevatedButton(
                     onPressed: () {
-                      ref.read(userDataProvider.notifier).addDiamonds(3); // Ödülü ver
-                      ref.read(userDataProvider.notifier).markDailyTimeRewardClaimed(); // Ödül alındı olarak işaretle
+                      ref.read(diamondNotifierProvider.notifier).addDiamonds(3);
+                      ref.read(userDataProvider.notifier).markDailyTimeRewardClaimed();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Uygulamada 20 dakika geçirdin ve 3 elmas kazandın!')),
+                        const SnackBar(content: Text('3 elmas kazandın!')),
                       );
                     },
                     child: const Text('Ödül Al (+3)'),
                   )
                 else if (userData.dailyTimeRewardClaimed)
-                  Icon(Icons.check_circle, color: Colors.green),
+                  const Icon(Icons.check_circle, color: Colors.green),
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
-        // Görev 2: Rastgele Test Doğru Cevapları
         Card(
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: theme.dividerColor.withOpacity(0.5))),
@@ -316,8 +303,8 @@ class _DailyTasksSection extends ConsumerWidget {
                 if (userData.randomTestCorrectAnswersToday >= 7 && !userData.dailyRandomTestRewardClaimed)
                   ElevatedButton(
                     onPressed: () {
-                      ref.read(userDataProvider.notifier).addDiamonds(2); // Ödülü ver
-                      ref.read(userDataProvider.notifier).markDailyRandomTestRewardClaimed(); // Ödül alındı olarak işaretle
+                      ref.read(diamondNotifierProvider.notifier).addDiamonds(2);
+                      ref.read(userDataProvider.notifier).markDailyRandomTestRewardClaimed();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Rastgele testlerde 7 doğruya ulaştın ve 2 elmas kazandın!')),
                       );
@@ -325,14 +312,13 @@ class _DailyTasksSection extends ConsumerWidget {
                     child: const Text('Ödül Al (+2)'),
                   )
                 else if (userData.dailyRandomTestRewardClaimed)
-                  Icon(Icons.check_circle, color: Colors.green),
+                  const Icon(Icons.check_circle, color: Colors.green),
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
-        // Görev 3: Premium Günlük Elmas (Koşullu olarak göster)
-        if (isPremium) // Sadece premium kullanıcılar için göster
+        if (isPremium)
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: theme.dividerColor.withOpacity(0.5))),
@@ -347,58 +333,63 @@ class _DailyTasksSection extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Premium Günlük Elmas', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                        Text('Günlük hediye elmasınızı alın.', style: theme.textTheme.bodyMedium),
+                        const Text('Günlük hediye elmasınızı alın.'),
                       ],
                     ),
                   ),
-                  if (!userData.dailyPremiumRewardClaimed)
+                  // *** DÜZELTME: Butonun görünürlüğü artık tarihe göre belirleniyor. ***
+                  if (true)
                     ElevatedButton(
-                      onPressed: () {
-                        final success = ref.read(userDataProvider.notifier).claimDailyPremiumReward();
+                      onPressed: () async {
+                        final success = await ref.read(userDataProvider.notifier).claimDailyPremiumReward();
                         if (success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Premium günlük elmas ödülünüzü kazandınız! (+1 Elmas)')),
-                          );
+                          await ref.read(diamondNotifierProvider.notifier).addDiamonds(1);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Premium günlük 1 elmas kazandın!')),
+                            );
+                          }
                         }
                       },
                       child: const Text('Ödül Al (+1)'),
                     )
                   else
-                    Icon(Icons.check_circle, color: Colors.green),
+                    const Icon(Icons.check_circle, color: Colors.green),
                 ],
               ),
             ),
           )
-        else // Premium olmayan kullanıcılar için teşvik mesajı
+        else
           Card(
             elevation: 0,
             color: theme.colorScheme.secondary.withOpacity(0.1),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: theme.colorScheme.secondary.withOpacity(0.5))),
             child: InkWell(
               onTap: () {
-                // Navigator.push yerine tab değişimi yapıldı
-                ref.read(mainNavigationSelectedIndexProvider.notifier).state = 2; // Mağaza sekmesi indeksi
+                ref.read(mainNavigationSelectedIndexProvider.notifier).state = 2; // Mağaza sekmesi
               },
               borderRadius: BorderRadius.circular(16),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      'Premium Ol, Her Gün Elmas Kazan!',
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Premium Ol, Her Gün Elmas Kazan!',
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Premium\'a geçerek her gün hediye elmas kazanın.',
+                            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.secondary.withOpacity(0.8)),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Aylık, Yıllık veya Ömür Boyu Premium paketlerden birini alarak her gün 1 elmas hediye kazanın!',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.secondary.withOpacity(0.8)),
-                    ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Icon(Icons.arrow_forward_ios, size: 20, color: theme.colorScheme.secondary),
-                    ),
+                    Icon(Icons.arrow_forward_ios, size: 20, color: theme.colorScheme.secondary),
                   ],
                 ),
               ),

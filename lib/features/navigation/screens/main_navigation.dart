@@ -6,6 +6,7 @@ import 'package:kpss_tarih_app/features/settings/screens/settings_screen.dart';
 import 'package:kpss_tarih_app/features/store/screens/store_screen.dart';
 import 'package:kpss_tarih_app/features/topics/screens/category_list_screen.dart';
 import 'dart:async'; // Timer için eklendi
+import 'package:connectivity_plus/connectivity_plus.dart'; // İnternet kontrolü için eklendi
 
 class MainNavigation extends ConsumerStatefulWidget {
   const MainNavigation({super.key});
@@ -15,9 +16,8 @@ class MainNavigation extends ConsumerStatefulWidget {
 }
 
 class _MainNavigationState extends ConsumerState<MainNavigation> {
-  // int _selectedIndex = 0; // Artık provider tarafından yönetiliyor
-  Timer? _dailyTimer; // Günlük görevler için zamanlayıcı (premium ödülü)
-  Timer? _timeSpentTimer; // Uygulamada geçirilen süre için zamanlayıcı
+  Timer? _dailyTimer;
+  Timer? _timeSpentTimer;
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -29,11 +29,11 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
   @override
   void initState() {
     super.initState();
-    // Uygulama ilk açıldığında karşılama pop-up'ını göster
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowWelcomePopup();
-      _startDailyTasksCheck(); // Günlük görev kontrollerini başlat
-      _startTimeSpentTracking(); // Uygulamada geçirilen süreyi takip etmeye başla
+      _startDailyTasksCheck();
+      _startTimeSpentTracking();
+      _checkPastPurchases(); // *** YENİ: Uygulama açılışında satın almaları kontrol et ***
     });
   }
 
@@ -44,57 +44,60 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
     super.dispose();
   }
 
+  // *** YENİ FONKSİYON: Geçmiş satın almaları internet varsa kontrol eder ***
+  void _checkPastPurchases() async {
+    final connectivityResult = await (Connectivity().checkConnectivity());
+    // Cihazın internete bağlı olup olmadığını kontrol et (none değilse bağlıdır)
+    if (connectivityResult.first != ConnectivityResult.none) {
+      // İnternet varsa, satın almaları geri yükleme işlemini tetikle.
+      // Bu işlem, PurchaseService içindeki restorePurchases metodunu çağırır.
+      ref.read(purchaseServiceProvider).restorePurchases();
+      print("İnternet bağlantısı var, geçmiş satın alımlar kontrol ediliyor.");
+    } else {
+      print("İnternet bağlantısı yok, satın alma kontrolü atlandı.");
+    }
+  }
+
   void _checkAndShowWelcomePopup() {
     final userData = ref.read(userDataProvider);
-    print('Has seen welcome popup: ${userData.hasSeenWelcomePopup}');
     if (!userData.hasSeenWelcomePopup) {
       _showWelcomePopup(context);
       ref.read(userDataProvider.notifier).markWelcomePopupSeen();
     }
   }
 
-  // YENİ: Günlük görev kontrollerini başlatan fonksiyon
   void _startDailyTasksCheck() {
-    // Uygulama açıldığında ve her saat başı premium ödülü kontrol et
     _checkDailyPremiumReward();
     _dailyTimer = Timer.periodic(const Duration(hours: 1), (timer) {
       _checkDailyPremiumReward();
     });
   }
 
-  // YENİ: Premium günlük ödülü kontrol eden ve veren fonksiyon
   void _checkDailyPremiumReward() {
     final success = ref.read(userDataProvider.notifier).claimDailyPremiumReward();
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Premium günlük elmas ödülünüzü kazandınız! (+1 Elmas)')),
-      );
+      // SnackBar'ı göstermek için context'in hala geçerli olduğundan emin ol
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Premium günlük elmas ödülünüzü kazandınız! (+1 Elmas)')),
+        );
+      }
     }
   }
 
-  // YENİ: Uygulamada geçirilen süreyi takip etmeye başla
   void _startTimeSpentTracking() {
-    // Her dakika süreyi güncelle
     _timeSpentTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       ref.read(userDataProvider.notifier).updateTimeSpent(1);
-      // Konsola debug mesajı ekleyelim (isteğe bağlı)
       final userData = ref.read(userDataProvider);
       print('Uygulamada geçirilen süre: ${userData.timeSpentMinutesToday} dakika');
-      // Süre ödülü kazanıldığında bildirim göstermek için burada kontrol edilebilir
-      if (userData.timeSpentMinutesToday >= 20 && userData.dailyTimeRewardClaimed) {
-        // Ödül zaten alınmışsa veya henüz 20 dakikaya ulaşılmadıysa bildirim gösterme
-        // Bu kontrolü UserDataNotifier içinde yapıyoruz, burada sadece bir tetikleyiciyiz.
-      }
     });
   }
 
 
-  // _onItemTapped fonksiyonu artık StateProvider'ı güncelleyecek
   void _onItemTapped(int index) {
     ref.read(mainNavigationSelectedIndexProvider.notifier).state = index;
   }
 
-  // Elmas bilgisi popup'ını gösteren fonksiyon
   void _showDiamondInfoPopup(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
@@ -139,7 +142,6 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.pop(context); // Popup'ı kapat
-                      // Mağaza sekmesine geçiş yap
                       ref.read(mainNavigationSelectedIndexProvider.notifier).state = 2; // Mağaza sekmesi indeksi
                     },
                     style: ElevatedButton.styleFrom(
@@ -172,12 +174,11 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
     );
   }
 
-  // Karşılama pop-up'ı
   void _showWelcomePopup(BuildContext context) {
     final theme = Theme.of(context);
     showDialog(
       context: context,
-      barrierDismissible: false, // Kullanıcı kapatana kadar kapanmasın
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -240,13 +241,12 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    // _selectedIndex artık doğrudan ref.watch ile okunuyor
     final selectedIndex = ref.watch(mainNavigationSelectedIndexProvider);
     final diamondCount = ref.watch(userDataProvider.select((data) => data.diamondCount));
     final theme = Theme.of(context);
 
     String appBarTitle;
-    switch (selectedIndex) { // selectedIndex kullanıldı
+    switch (selectedIndex) {
       case 0:
         appBarTitle = 'Ana Sayfa';
         break;
@@ -288,12 +288,12 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
         ],
       ),
       body: IndexedStack(
-        index: selectedIndex, // selectedIndex kullanıldı
+        index: selectedIndex,
         children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        currentIndex: selectedIndex, // selectedIndex kullanıldı
+        currentIndex: selectedIndex,
         onTap: _onItemTapped,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Ana Sayfa'),

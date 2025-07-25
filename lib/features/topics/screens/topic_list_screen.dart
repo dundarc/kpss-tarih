@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kpss_tarih_app/core/providers/providers.dart';
 import 'package:kpss_tarih_app/data/models/topic_model.dart';
 import 'package:kpss_tarih_app/features/topics/models/category_model.dart';
 import 'package:kpss_tarih_app/features/topics/screens/topic_detail_screen.dart';
+import 'package:kpss_tarih_app/core/providers/providers.dart'; // Content service için eklendi
 
 // Belirli bir kategoriye ait konuları getiren yeni provider
 final topicsForCategoryProvider = FutureProvider.autoDispose.family<List<Topic>, String>((ref, jsonPath) {
@@ -17,11 +17,15 @@ class TopicListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Kategoriye ait konuları asenkron olarak yükle
     final topicsAsyncValue = ref.watch(topicsForCategoryProvider(category.jsonPath));
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(category.title)),
+      appBar: AppBar(
+        // *** HATA DÜZELTMESİ: 'title' yerine modeldeki doğru alan olan 'name' kullanıldı. ***
+        title: Text(category.title),
+      ),
       body: topicsAsyncValue.when(
         data: (topics) {
           if (topics.isEmpty) {

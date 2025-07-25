@@ -76,4 +76,47 @@ class UserData extends HiveObject {
     this.randomTestEntryAdWatchCount = 0,
     this.randomTestEntryAdCooldownEndTime = 0,
   });
+
+  // copyWith metodunu ekliyoruz
+  UserData copyWith({
+    int? diamondCount,
+    bool? isPremium,
+    bool? isLifetimePremium,
+    List<String>? completedTopicIds,
+    int? storeRewardedAdWatchCount,
+    int? storeAdCooldownEndTime,
+    List<String>? unlockedTipsTopicIds,
+    bool? hasSeenWelcomePopup,
+    int? timeSpentMinutesToday,
+    int? lastTimeSpentUpdateDay,
+    bool? dailyTimeRewardClaimed,
+    int? randomTestCorrectAnswersToday,
+    int? lastRandomTestUpdateDay,
+    bool? dailyRandomTestRewardClaimed,
+    bool? dailyPremiumRewardClaimed,
+    int? lastPremiumRewardDay,
+    int? randomTestEntryAdWatchCount,
+    int? randomTestEntryAdCooldownEndTime,
+  }) {
+    return UserData(
+      diamondCount: diamondCount ?? this.diamondCount,
+      isPremium: isPremium ?? this.isPremium,
+      isLifetimePremium: isLifetimePremium ?? this.isLifetimePremium,
+      completedTopicIds: completedTopicIds ?? this.completedTopicIds,
+      storeRewardedAdWatchCount: storeRewardedAdWatchCount ?? this.storeRewardedAdWatchCount,
+      storeAdCooldownEndTime: storeAdCooldownEndTime ?? this.storeAdCooldownEndTime,
+      unlockedTipsTopicIds: unlockedTipsTopicIds ?? this.unlockedTipsTopicIds,
+      hasSeenWelcomePopup: hasSeenWelcomePopup ?? this.hasSeenWelcomePopup,
+      timeSpentMinutesToday: timeSpentMinutesToday ?? this.timeSpentMinutesToday,
+      lastTimeSpentUpdateDay: lastTimeSpentUpdateDay ?? this.lastTimeSpentUpdateDay,
+      dailyTimeRewardClaimed: dailyTimeRewardClaimed ?? this.dailyTimeRewardClaimed,
+      randomTestCorrectAnswersToday: randomTestCorrectAnswersToday ?? this.randomTestCorrectAnswersToday,
+      lastRandomTestUpdateDay: lastRandomTestUpdateDay ?? this.lastRandomTestUpdateDay,
+      dailyRandomTestRewardClaimed: dailyRandomTestRewardClaimed ?? this.dailyRandomTestRewardClaimed,
+      dailyPremiumRewardClaimed: dailyPremiumRewardClaimed ?? this.dailyPremiumRewardClaimed,
+      lastPremiumRewardDay: lastPremiumRewardDay ?? this.lastPremiumRewardDay,
+      randomTestEntryAdWatchCount: randomTestEntryAdWatchCount ?? this.randomTestEntryAdWatchCount,
+      randomTestEntryAdCooldownEndTime: randomTestEntryAdCooldownEndTime ?? this.randomTestEntryAdCooldownEndTime,
+    );
+  }
 }

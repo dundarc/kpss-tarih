@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tarih_app/core/providers/providers.dart';
 import 'package:kpss_tarih_app/data/models/question_model.dart';
 import 'package:kpss_tarih_app/features/test/providers/test_provider.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // AdMob için eklendi
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+
+import '../../store/models/user_plan.dart';
+import '../../store/providers/store_providers.dart'; // AdMob için eklendi
 
 final questionsProvider = FutureProvider.autoDispose.family<List<Question>, String>((ref, topicId) {
   final contentService = ref.watch(contentServiceProvider);
@@ -48,7 +51,7 @@ class _TestScreenState extends ConsumerState<TestScreen> {
   // Banner reklamı yükleyen metot
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-3940256099942544/6300978111', // Test Banner Reklam Birimi Kimliği
+      adUnitId: 'ca-app-pub-5204870751552541/3147625365', // Test Banner Reklam Birimi Kimliği
       request: const AdRequest(),
       size: AdSize.banner,
       listener: BannerAdListener(
@@ -95,7 +98,8 @@ class _TestScreenState extends ConsumerState<TestScreen> {
     final testState = ref.watch(testControllerProvider);
     final theme = Theme.of(context);
     final userData = ref.watch(userDataProvider); // Kullanıcı verisini dinle
-    final isPremium = userData.isPremium || userData.isLifetimePremium; // Premium durumunu al
+    final userPlan = ref.watch(userPlanProvider);
+    final isPremium = userPlan != UserPlan.free;
 
     if (testState.status == TestStatus.initial) {
       return Scaffold(
@@ -188,7 +192,7 @@ class _TestScreenState extends ConsumerState<TestScreen> {
               ),
               const SizedBox(height: 16),
               // Reklam alanı ve sonraki/bitir butonu
-              if (!isPremium && _bannerAd != null && _isBannerAdLoaded) // Sadece premium olmayan kullanıcılar için reklamı göster
+              if (!isPremium && _bannerAd != null && _isBannerAdLoaded)// Sadece premium olmayan kullanıcılar için reklamı göster
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: SizedBox(

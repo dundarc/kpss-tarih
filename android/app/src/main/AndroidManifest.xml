@@ -1,13 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="com.android.vending.BILLING" />
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="KPSS Tarih"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
         <!-- Google Mobile Ads SDK meta-data tag'i eklendi -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/> <!-- Test AdMob Uygulama Kimliği -->
+            android:value="ca-app-pub-5204870751552541~2954661122"/> <!-- Test AdMob Uygulama Kimliği -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

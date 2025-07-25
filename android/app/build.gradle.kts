@@ -40,8 +40,8 @@ android {
         applicationId = "com.dundarc.tarih"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
-        versionCode = 6
-        versionName = "6.0"
+        versionCode = 9
+        versionName = "9.0"
     }
 
     buildTypes {

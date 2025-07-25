@@ -2,34 +2,38 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tarih_app/data/models/user_data_model.dart';
 import 'package:kpss_tarih_app/data/services/storage_service.dart';
 import 'package:kpss_tarih_app/data/services/content_service.dart';
-import 'package:kpss_tarih_app/data/services/purchase_service.dart'; // PurchaseService için eklendi
-import 'package:in_app_purchase/in_app_purchase.dart'; // PurchaseDetails için eklendi
-import 'package:flutter/material.dart'; // ChangeNotifier ve SnackBar için
+import 'package:kpss_tarih_app/data/services/pcs.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:flutter/material.dart';
 
-// main.dart'tan gelen GlobalKey'e erişim için
 import 'package:kpss_tarih_app/main.dart';
 
 
 final storageServiceProvider = Provider<StorageService>((ref) => StorageService());
 final contentServiceProvider = Provider<ContentService>((ref) => ContentService());
 
-// Ana navigasyonun seçili sekme indeksini yöneten provider
 final mainNavigationSelectedIndexProvider = StateProvider<int>((ref) => 0);
 
 class UserDataNotifier extends StateNotifier<UserData> {
   final StorageService _storageService;
-  // Ref'i sadece provider'lara erişim için tutuyoruz, context için değil.
   final Ref _ref;
 
-  UserDataNotifier(this._storageService, this._ref) : super(_storageService.getUserData());
+  UserDataNotifier(this._storageService, this._ref) : super(_storageService.getUserData()) {
+    // EKLEME: Ekran görüntüsü almak için premium durumu geçici olarak etkinleştirme
+    // Bu satırları ekran görüntülerini aldıktan sonra SİLMEYİ UNUTMAYIN!
+   // state = state.copyWith(isPremium: true, isLifetimePremium: true);
+    // Veya sadece isPremium yapmak isterseniz:
+    // state = state.copyWith(isPremium: true);
 
-  // State'i güncellemeyi kolaylaştıran yardımcı fonksiyon
+    // Bu değişikliği kalıcı hale getirmek isterseniz (genellikle test için tavsiye edilmez):
+    // _storageService.updateUserData(state);
+  }
+
   UserData _newState({
     int? diamondCount,
     bool? isPremium,
     bool? isLifetimePremium,
     List<String>? completedTopicIds,
-    // Yeniden adlandırılmış ve yeni alanlar
     int? storeRewardedAdWatchCount,
     int? storeAdCooldownEndTime,
     List<String>? unlockedTipsTopicIds,
@@ -50,7 +54,6 @@ class UserDataNotifier extends StateNotifier<UserData> {
       isPremium: isPremium ?? state.isPremium,
       isLifetimePremium: isLifetimePremium ?? state.isLifetimePremium,
       completedTopicIds: completedTopicIds ?? state.completedTopicIds,
-      // Yeniden adlandırılmış ve yeni alanlar
       storeRewardedAdWatchCount: storeRewardedAdWatchCount ?? state.storeRewardedAdWatchCount,
       storeAdCooldownEndTime: storeAdCooldownEndTime ?? state.storeAdCooldownEndTime,
       unlockedTipsTopicIds: unlockedTipsTopicIds ?? state.unlockedTipsTopicIds,
@@ -68,10 +71,9 @@ class UserDataNotifier extends StateNotifier<UserData> {
     );
   }
 
-  // Yardımcı fonksiyon: Günün değişip değişmediğini kontrol eder
   bool _isNewDay(int lastUpdateDay) {
     final now = DateTime.now();
-    final currentDay = DateTime(now.year, now.month, now.day).dayOfYear; // Yılın günü
+    final currentDay = DateTime(now.year, now.month, now.day).dayOfYear;
     return currentDay != lastUpdateDay;
   }
 
@@ -96,9 +98,7 @@ class UserDataNotifier extends StateNotifier<UserData> {
     _storageService.updateUserData(state);
   }
 
-  // YENİ: Mağaza için ödüllü reklam izleme mantığı (5 elmas verir)
   bool useStoreRewardedAd() {
-    // Cooldown süresi dolduysa sayacı sıfırla
     if (DateTime.fromMillisecondsSinceEpoch(state.storeAdCooldownEndTime).isBefore(DateTime.now())) {
       state = _newState(storeRewardedAdWatchCount: 0, storeAdCooldownEndTime: 0);
       _storageService.updateUserData(state);
@@ -107,7 +107,7 @@ class UserDataNotifier extends StateNotifier<UserData> {
     if (state.storeRewardedAdWatchCount == 0) {
       state = _newState(
         storeRewardedAdWatchCount: 1,
-        diamondCount: state.diamondCount + 5, // 5 elmas verir
+        diamondCount: state.diamondCount + 5,
         storeAdCooldownEndTime: DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch,
       );
       _storageService.updateUserData(state);
@@ -116,9 +116,7 @@ class UserDataNotifier extends StateNotifier<UserData> {
     return false;
   }
 
-  // YENİ: Rastgele test girişi için ödüllü reklam izleme mantığı (elmas vermez)
   bool useRandomTestEntryAd() {
-    // Cooldown süresi dolduysa sayacı sıfırla
     if (DateTime.fromMillisecondsSinceEpoch(state.randomTestEntryAdCooldownEndTime).isBefore(DateTime.now())) {
       state = _newState(randomTestEntryAdWatchCount: 0, randomTestEntryAdCooldownEndTime: 0);
       _storageService.updateUserData(state);
@@ -135,15 +133,11 @@ class UserDataNotifier extends StateNotifier<UserData> {
     return false;
   }
 
-  // Bu fonksiyon artık kullanılmıyor, yerine useStoreRewardedAd ve useRandomTestEntryAd kullanılıyor.
-  // Ancak, diğer yerlerdeki çağrılar için geçici olarak bırakılabilir veya kaldırılabilir.
   void resetAdCount() {
-    // Mağaza reklamı cooldown kontrolü
     if (DateTime.fromMillisecondsSinceEpoch(state.storeAdCooldownEndTime).isBefore(DateTime.now())) {
       state = _newState(storeRewardedAdWatchCount: 0, storeAdCooldownEndTime: 0);
       _storageService.updateUserData(state);
     }
-    // Rastgele test girişi reklamı cooldown kontrolü
     if (DateTime.fromMillisecondsSinceEpoch(state.randomTestEntryAdCooldownEndTime).isBefore(DateTime.now())) {
       state = _newState(randomTestEntryAdWatchCount: 0, randomTestEntryAdCooldownEndTime: 0);
       _storageService.updateUserData(state);
@@ -228,7 +222,6 @@ class UserDataNotifier extends StateNotifier<UserData> {
     _storageService.updateUserData(state);
   }
 
-  // Püf noktalarını açar (UserDataNotifier'a taşındı)
   bool unlockTips(String topicId) {
     if (state.unlockedTipsTopicIds.contains(topicId) || state.diamondCount < 3) {
       return false;
@@ -244,46 +237,63 @@ class UserDataNotifier extends StateNotifier<UserData> {
     return true;
   }
 
-  // YENİ: Satın alma başarılarını işleyen metot
   void handlePurchase(PurchaseDetails purchaseDetails) {
     if (purchaseDetails.status == PurchaseStatus.purchased || purchaseDetails.status == PurchaseStatus.restored) {
+      String successMessage = '';
       switch (purchaseDetails.productID) {
         case aylikAbonelikId:
+          state = _newState(isPremium: true, isLifetimePremium: false);
+          successMessage = 'Tebrikler! Aylık Premium aboneliğiniz aktif edildi.';
+          break;
         case yillikAbonelikId:
           state = _newState(isPremium: true, isLifetimePremium: false);
+          successMessage = 'Tebrikler! Yıllık Premium aboneliğiniz aktif edildi.';
           break;
         case omurBoyuId:
           state = _newState(isPremium: true, isLifetimePremium: true);
+          successMessage = 'Tebrikler! Ömür Boyu Premium aboneliğiniz aktif edildi.';
           break;
         case elmas100Id:
           addDiamonds(100);
+          successMessage = 'Tebrikler! 100 Elmas hesabınıza eklendi.';
           break;
         case elmas250Id:
           addDiamonds(250);
+          successMessage = 'Tebrikler! 250 Elmas hesabınıza eklendi.';
           break;
         case elmas500Id:
           addDiamonds(500);
+          successMessage = 'Tebrikler! 500 Elmas hesabınıza eklendi.';
           break;
+        default:
+          successMessage = 'Geçmiş işlemleri kontrol edildi!';
       }
       _storageService.updateUserData(state);
-      // UI'a bildirim göndermek için SnackBar gösterebiliriz
-      // GlobalKey üzerinden context'e erişim
       final context = navigatorKey.currentContext;
       if (context != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${purchaseDetails.productID} başarıyla satın alındı/geri yüklendi!')),
+          SnackBar(content: Text(successMessage)),
         );
       }
-      _ref.read(mainNavigationSelectedIndexProvider.notifier).state = 0; // Ana sayfaya dön
+      _ref.read(mainNavigationSelectedIndexProvider.notifier).state = 0;
     }
   }
 
-  // YENİ: Satın alma hatalarını işleyen metot
   void handlePurchaseError(String errorMessage) {
     final context = navigatorKey.currentContext;
     if (context != null) {
+      String userFriendlyMessage = 'Satın alma işleminde bir hata oluştu: $errorMessage. Lütfen daha sonra tekrar deneyin.';
+
+      if (errorMessage.contains('kullanıcı tarafından iptal edildi')) {
+        userFriendlyMessage = 'Satın alma işlemi iptal edildi. Ürün satın alınmadı.';
+      } else if (errorMessage.contains('Mağazada ürün bulunamadı')) {
+        userFriendlyMessage = 'Satın almak istediğiniz ürün mağazada bulunamadı. Lütfen daha sonra tekrar deneyin.';
+      } else if (errorMessage.contains('DEVELOPER_ERROR')) {
+        userFriendlyMessage = 'Satın alma işlemi tamamlanamadı. Lütfen Google Play Store ayarlarınızı kontrol edin veya daha sonra tekrar deneyin.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Satın alma hatası: $errorMessage')),
+        SnackBar(content: Text(userFriendlyMessage)),
       );
     }
   }
@@ -291,7 +301,7 @@ class UserDataNotifier extends StateNotifier<UserData> {
 
 final userDataProvider = StateNotifierProvider<UserDataNotifier, UserData>((ref) {
   final storageService = ref.watch(storageServiceProvider);
-  return UserDataNotifier(storageService, ref); // ref'i de iletiyoruz
+  return UserDataNotifier(storageService, ref);
 });
 
 extension DateExtension on DateTime {
@@ -300,7 +310,6 @@ extension DateExtension on DateTime {
   }
 }
 
-// YENİ: PurchaseService'i sağlayan provider
 final purchaseServiceProvider = ChangeNotifierProvider<PurchaseService>((ref) {
   final userDataNotifier = ref.read(userDataProvider.notifier);
   return PurchaseService(

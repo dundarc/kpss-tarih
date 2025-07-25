@@ -1,25 +1,27 @@
 import 'package:hive_flutter/hive_flutter.dart';
-import '../models/user_data_model.dart';
+import '../models/user_data_model.dart'; // UserData modelini import et
 
 class StorageService {
-  late Box<UserData> _userDataBox;
+  late Box<UserData> _userDataBox; // UserData tipinde bir Hive kutusu
 
+  // Depolama servisini başlatır
   Future<void> init() async {
-    await Hive.initFlutter();
-    Hive.registerAdapter(UserDataAdapter());
-    _userDataBox = await Hive.openBox<UserData>('userDataBox');
+    await Hive.initFlutter(); // Hive'ı Flutter için başlat
+    Hive.registerAdapter(UserDataAdapter()); // UserData adaptörünü kaydet
+    _userDataBox = await Hive.openBox<UserData>('userDataBox'); // 'userDataBox' adında bir kutu aç
 
+    // Eğer kutu boşsa, varsayılan kullanıcı verilerini oluştur
     if (_userDataBox.isEmpty) {
-      // Uygulama ilk kez yüklendiğinde varsayılan kullanıcı verilerini oluştur
       _userDataBox.put('user', UserData(diamondCount: 10, hasSeenWelcomePopup: false));
     }
   }
 
+  // Kullanıcı verilerini getirir
   UserData getUserData() {
-    final data = _userDataBox.get('user');
+    final data = _userDataBox.get('user'); // 'user' anahtarıyla veriyi al
     if (data != null) {
+      // Nullable alanlar için varsayılan değerleri ata (uygulama güncellemelerinde oluşabilecek sorunları önler)
       data.completedTopicIds ??= [];
-      // Yeniden adlandırılmış ve yeni alanları varsayılan değerlerle başlat
       data.storeRewardedAdWatchCount ??= 0;
       data.storeAdCooldownEndTime ??= 0;
       data.unlockedTipsTopicIds ??= [];
@@ -32,15 +34,16 @@ class StorageService {
       data.dailyRandomTestRewardClaimed ??= false;
       data.dailyPremiumRewardClaimed ??= false;
       data.lastPremiumRewardDay ??= 0;
-      data.randomTestEntryAdWatchCount ??= 0; // Yeni alan
-      data.randomTestEntryAdCooldownEndTime ??= 0; // Yeni alan
+      data.randomTestEntryAdWatchCount ??= 0;
+      data.randomTestEntryAdCooldownEndTime ??= 0;
       return data;
     }
-    // Her ihtimale karşı varsayılan bir veri döndür.
+    // Eğer veri yoksa veya null ise, varsayılan bir UserData nesnesi döndür
     return UserData(diamondCount: 10, hasSeenWelcomePopup: false);
   }
 
+  // Kullanıcı verilerini günceller
   Future<void> updateUserData(UserData data) async {
-    await _userDataBox.put('user', data);
+    await _userDataBox.put('user', data); // 'user' anahtarıyla veriyi güncelle
   }
 }
